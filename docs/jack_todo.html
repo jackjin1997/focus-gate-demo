@@ -141,7 +141,7 @@
       <span class="todo-checkbox"></span>
       <div class="todo-text">
         <b>完成真实模式安全冒烟</b>
-        <small>2026-07-26 · <code>lark-cli 1.0.68</code>：live smoke 验证回环绑定、<code>127.0.0.1 → localhost</code>、同源防护、OAuth 缺失时失败关闭，以及未绑定计划 <code>writes=0</code>；未调用 <code>presence/options</code>、<code>approve</code> 或 <code>messages.search</code>。</small>
+        <small>2026-07-26 · <code>lark-cli 1.0.68</code>：live smoke 验证 <code>/api/health</code> 返回 <code>ready / local-real / writesEnabled=false</code>、回环绑定、<code>127.0.0.1 → localhost</code>、同源防护、OAuth 缺失时失败关闭，以及未绑定计划 <code>writes=0</code>；未调用 <code>presence/options</code>、<code>approve</code> 或 <code>messages.search</code>。</small>
         <small>一次消费、重放防护与正文不落盘由自动测试覆盖；本次 live smoke 未跨过读取确认墙。</small>
       </div>
     </li>
