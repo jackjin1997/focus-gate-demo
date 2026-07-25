@@ -12,6 +12,7 @@ const TERMINATION_GRACE_ENDED = Symbol('termination-grace-ended')
 const DEFAULT_READINESS_TIMEOUT_MS = 15_000
 const DEFAULT_POLL_INTERVAL_MS = 100
 const DEFAULT_TERMINATION_GRACE_MS = 500
+const STOP_ERROR_MESSAGE = 'Managed preview could not be stopped.'
 
 export interface ManagedPreviewTarget {
   readonly baseUrl: string
@@ -119,23 +120,30 @@ export async function startManagedPreview(
   let stopPromise: Promise<void> | undefined
   const stop = (): Promise<void> => {
     stopPromise ??= (async () => {
-      if (hasExited(child)) return
-      child.kill('SIGTERM')
-      const exitedAfterTerm = await exitsWithinGrace(
-        child,
-        processExit,
-        timers,
-        terminationGraceMs,
-      )
-      if (exitedAfterTerm) return
+      try {
+        if (hasExited(child)) return
+        child.kill('SIGTERM')
+        const exitedAfterTerm = await exitsWithinGrace(
+          child,
+          processExit,
+          timers,
+          terminationGraceMs,
+        )
+        if (exitedAfterTerm) return
 
-      child.kill('SIGKILL')
-      await exitsWithinGrace(
-        child,
-        processExit,
-        timers,
-        terminationGraceMs,
-      )
+        child.kill('SIGKILL')
+        const exitedAfterKill = await exitsWithinGrace(
+          child,
+          processExit,
+          timers,
+          terminationGraceMs,
+        )
+        if (!exitedAfterKill) {
+          throw new Error(STOP_ERROR_MESSAGE)
+        }
+      } catch {
+        throw new Error(STOP_ERROR_MESSAGE)
+      }
     })()
     return stopPromise
   }
@@ -145,6 +153,7 @@ export async function startManagedPreview(
       fetch,
       signal: abortController.signal,
       processExit,
+      processHasExited: () => hasExited(child),
       timers,
       readinessTimeoutMs,
       pollIntervalMs,
@@ -157,7 +166,11 @@ export async function startManagedPreview(
     }
   } catch (error) {
     abortController.abort()
-    await stop()
+    try {
+      await stop()
+    } catch {
+      throw new Error(STOP_ERROR_MESSAGE)
+    }
     throw error
   }
 }
@@ -203,6 +216,7 @@ interface ReadinessOptions {
   readonly fetch: PreviewFetcher
   readonly signal: AbortSignal
   readonly processExit: Promise<void>
+  readonly processHasExited: () => boolean
   readonly timers: PreviewTimers
   readonly readinessTimeoutMs: number
   readonly pollIntervalMs: number
@@ -217,6 +231,10 @@ async function waitUntilReady(options: ReadinessOptions): Promise<void> {
 
   try {
     while (true) {
+      if (options.processHasExited()) {
+        throw new Error('Managed preview exited before becoming ready.')
+      }
+
       const probe = options.fetch(LOCAL_BASE_URL, {
         signal: options.signal,
       }).then(
@@ -224,12 +242,15 @@ async function waitUntilReady(options: ReadinessOptions): Promise<void> {
         () => false,
       )
       const probeResult = await Promise.race([
-        probe,
         options.processExit.then(() => PROCESS_ENDED),
         timeout.promise,
+        probe,
       ])
 
-      if (probeResult === PROCESS_ENDED) {
+      if (
+        probeResult === PROCESS_ENDED ||
+        options.processHasExited()
+      ) {
         throw new Error('Managed preview exited before becoming ready.')
       }
       if (probeResult === READINESS_TIMED_OUT) {
@@ -245,9 +266,9 @@ async function waitUntilReady(options: ReadinessOptions): Promise<void> {
         POLL_READY,
       )
       const pollResult = await Promise.race([
-        poll.promise,
         options.processExit.then(() => PROCESS_ENDED),
         timeout.promise,
+        poll.promise,
       ])
       poll.cancel()
 

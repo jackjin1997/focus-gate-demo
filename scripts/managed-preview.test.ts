@@ -112,6 +112,44 @@ describe('startManagedPreview', () => {
     expect(child.kill).not.toHaveBeenCalled()
   })
 
+  it('rejects an OK response when the spawned process is already exited', async () => {
+    const child = new FakePreviewProcess()
+    child.exitCode = 1
+
+    const outcome = await startManagedPreview({
+      spawn: vi.fn(() => child),
+      fetch: vi.fn(async () => ({ ok: true })),
+    }).catch((error: unknown) => error)
+
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        message: 'Managed preview exited before becoming ready.',
+      }),
+    )
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the process exits as an OK response is observed', async () => {
+    const child = new FakePreviewProcess()
+
+    const outcome = await startManagedPreview({
+      spawn: vi.fn(() => child),
+      fetch: vi.fn(async () => ({
+        get ok(): boolean {
+          child.exit(1, null)
+          return true
+        },
+      })),
+    }).catch((error: unknown) => error)
+
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        message: 'Managed preview exited before becoming ready.',
+      }),
+    )
+    expect(child.kill).not.toHaveBeenCalled()
+  })
+
   it('maps synchronous spawn failures to a fixed error', async () => {
     const secret = 'preview-secret-output'
 
@@ -188,6 +226,73 @@ describe('startManagedPreview', () => {
 
     await expect(firstStop).resolves.toBeUndefined()
     await expect(target.stop()).resolves.toBeUndefined()
+    expect(child.kill).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails with a fixed error when SIGKILL cannot stop the process', async () => {
+    vi.useFakeTimers()
+    const child = new FakePreviewProcess()
+    const target = await startManagedPreview({
+      spawn: vi.fn(() => child),
+      fetch: vi.fn(async () => ({ ok: true })),
+      terminationGraceMs: 20,
+    })
+
+    const outcomePromise = target.stop().catch(
+      (error: unknown) => error,
+    )
+    await vi.advanceTimersByTimeAsync(40)
+
+    await expect(outcomePromise).resolves.toEqual(
+      expect.objectContaining({
+        message: 'Managed preview could not be stopped.',
+      }),
+    )
+    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
+    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
+  })
+
+  it('maps termination signal failures to a fixed error', async () => {
+    const secret = 'vite-secret-process-details'
+    const child = new FakePreviewProcess()
+    child.kill.mockImplementation(() => {
+      throw new Error(secret)
+    })
+    const target = await startManagedPreview({
+      spawn: vi.fn(() => child),
+      fetch: vi.fn(async () => ({ ok: true })),
+    })
+
+    const outcome = await target.stop().catch(
+      (error: unknown) => error,
+    )
+
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        message: 'Managed preview could not be stopped.',
+      }),
+    )
+    expect(JSON.stringify(outcome)).not.toContain(secret)
+  })
+
+  it('reports a fixed cleanup error when readiness and stopping both fail', async () => {
+    vi.useFakeTimers()
+    const child = new FakePreviewProcess()
+
+    const outcomePromise = startManagedPreview({
+      spawn: vi.fn(() => child),
+      fetch: vi.fn(async () => ({ ok: false })),
+      readinessTimeoutMs: 10,
+      terminationGraceMs: 5,
+    }).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(20)
+    const outcome = await outcomePromise
+
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        message: 'Managed preview could not be stopped.',
+      }),
+    )
     expect(child.kill).toHaveBeenCalledTimes(2)
   })
 })
