@@ -244,6 +244,52 @@
   line-height: 1.6;
 }
 
+.authRecovery {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--verified);
+  background: #e7eae7;
+}
+
+.authRecovery h2,
+.authRecovery p {
+  margin: 0;
+}
+
+.authRecovery h2 {
+  font-size: 17px;
+}
+
+.authRecovery p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.authRecovery code {
+  display: block;
+  margin-top: 16px;
+  padding: 14px;
+  overflow-x: auto;
+  color: var(--paper);
+  background: var(--ink);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.authRecovery .authUnavailable {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--ink);
+  background: var(--paper);
+}
+
 .reviewStage {
   position: relative;
   align-items: start;

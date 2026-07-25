@@ -16,6 +16,7 @@ import {
   supportsHumanPresence,
   type ReadRunResult,
 } from './human-presence-client'
+import { buildLarkAuthCommand } from './lark-auth-command'
 import styles from './real-focus-gate.module.css'
 
 interface CapabilityReview {
@@ -96,6 +97,7 @@ export function RealFocusGate() {
       && review.lark.identity === 'user'
       && review.lark.messageSearch,
   )
+  const authCommand = buildLarkAuthCommand(review?.lark.profileName)
   const canRead = connectionReady && presenceRegistered
 
   useEffect(() => {
@@ -244,23 +246,28 @@ export function RealFocusGate() {
               </div>
             </div>
 
+            {!connectionReady && (
+              <section
+                className={styles.authRecovery}
+                aria-labelledby="lark-auth-recovery-title"
+              >
+                <h2 id="lark-auth-recovery-title">只需补充消息搜索权限</h2>
+                <p>此命令只补充 search:message 权限，不会读取任何消息。</p>
+                {authCommand ? (
+                  <code>{authCommand}</code>
+                ) : (
+                  <p className={styles.authUnavailable}>
+                    当前能力报告没有固定 Profile，无法安全生成授权命令。请先固定 lark-cli Profile，再重新检查。
+                  </p>
+                )}
+                <p>
+                  完成授权不等于批准读取。授权后返回这里并重新检查；后续仍需审阅读取计划，再用 Touch ID 明确批准。
+                </p>
+              </section>
+            )}
+
             <div className={styles.actionBlock}>
-              {!presenceRegistered ? (
-                <button
-                  type="button"
-                  className={styles.primaryButton}
-                  onClick={establishHumanPresence}
-                  disabled={busy || !presenceSupported}
-                >
-                  <Fingerprint aria-hidden="true" size={18} />
-                  {busy ? '等待系统确认' : '建立 Touch ID 门禁'}
-                </button>
-              ) : connectionReady ? (
-                <button type="button" className={styles.primaryButton} onClick={previewRead} disabled={busy}>
-                  {busy ? '正在生成清单' : '审阅首次读取'}
-                  {!busy && <ChevronRight aria-hidden="true" size={18} />}
-                </button>
-              ) : (
+              {!connectionReady ? (
                 <button
                   type="button"
                   className={styles.primaryButton}
@@ -270,15 +277,30 @@ export function RealFocusGate() {
                   {busy ? '正在重新检查' : '重新检查飞书授权'}
                   {!busy && <ChevronRight aria-hidden="true" size={18} />}
                 </button>
+              ) : !presenceRegistered ? (
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={establishHumanPresence}
+                  disabled={busy || !presenceSupported}
+                >
+                  <Fingerprint aria-hidden="true" size={18} />
+                  {busy ? '等待系统确认' : '建立 Touch ID 门禁'}
+                </button>
+              ) : (
+                <button type="button" className={styles.primaryButton} onClick={previewRead} disabled={busy}>
+                  {busy ? '正在生成清单' : '审阅首次读取'}
+                  {!busy && <ChevronRight aria-hidden="true" size={18} />}
+                </button>
               )}
               <span>
-                {!presenceRegistered
+                {!connectionReady
+                  ? '授权动作在终端中由你执行；这里只会重新检查状态。'
+                  : !presenceRegistered
                   ? presenceSupported
                     ? 'Passkey 只用于证明由你本人跨墙。'
                     : '当前浏览器不支持 WebAuthn，真实读取保持关闭。'
-                  : connectionReady
-                  ? '下一步仍不会读取消息。'
-                  : '完成最小飞书授权后，在这里重新检查。'}
+                  : '下一步仍不会读取消息。'}
               </span>
             </div>
             {error && <p className={styles.error} role="alert">{error}</p>}

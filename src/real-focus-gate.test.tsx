@@ -167,6 +167,58 @@ describe('RealFocusGate', () => {
   })
 
   it('keeps the read wall closed when the current CLI has no user message-search grant', async () => {
+    const disconnectedReview = {
+      ...capabilityReview,
+      lark: {
+        ...capabilityReview.lark,
+        authenticated: false,
+        identity: 'bot',
+        messageSearch: false,
+      },
+    }
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse(disconnectedReview))
+      .mockImplementationOnce(() => jsonResponse(disconnectedReview))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<RealFocusGate />)
+
+    fireEvent.click(screen.getByRole('button', { name: '开始能力研究' }))
+    await screen.findByText('需要重新授权')
+
+    expect(
+      screen.getByRole('heading', { name: '只需补充消息搜索权限' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "lark-cli --profile 'focus-profile' auth login --scope 'search:message'",
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('此命令只补充 search:message 权限，不会读取任何消息。'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        '完成授权不等于批准读取。授权后返回这里并重新检查；后续仍需审阅读取计划，再用 Touch ID 明确批准。',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新检查飞书授权' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: '审阅首次读取' })).not.toBeInTheDocument()
+    expect(authenticateReadPlan).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: '重新检查飞书授权' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/capability-reviews',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(authenticateReadPlan).not.toHaveBeenCalled()
+  })
+
+  it('prioritizes OAuth recovery when both Lark and Passkey are unavailable', async () => {
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(() => jsonResponse({
@@ -177,17 +229,77 @@ describe('RealFocusGate', () => {
           identity: 'bot',
           messageSearch: false,
         },
+        humanPresence: { registered: false, method: 'passkey' },
       }))
     vi.stubGlobal('fetch', fetchMock)
     render(<RealFocusGate />)
 
     fireEvent.click(screen.getByRole('button', { name: '开始能力研究' }))
-    await screen.findByText('需要重新授权')
 
+    expect(
+      await screen.findByRole('heading', { name: '只需补充消息搜索权限' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重新检查飞书授权' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: '建立 Touch ID 门禁' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '审阅首次读取' })).not.toBeInTheDocument()
+    expect(registerHumanPresence).not.toHaveBeenCalled()
     expect(authenticateReadPlan).not.toHaveBeenCalled()
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders a safely quoted command for an untrusted pinned profile', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({
+        ...capabilityReview,
+        lark: {
+          ...capabilityReview.lark,
+          profileName: "focus'; echo pwn #",
+          authenticated: false,
+          identity: 'bot',
+          messageSearch: false,
+        },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<RealFocusGate />)
+
+    fireEvent.click(screen.getByRole('button', { name: '开始能力研究' }))
+
+    expect(
+      await screen.findByText(
+        "lark-cli --profile 'focus'\\''; echo pwn #' auth login --scope 'search:message'",
+      ),
+    ).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(authenticateReadPlan).not.toHaveBeenCalled()
+  })
+
+  it('does not fabricate an executable authorization command without a pinned profile', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => jsonResponse({
+        ...capabilityReview,
+        lark: {
+          ...capabilityReview.lark,
+          profileName: null,
+          authenticated: false,
+          identity: 'bot',
+          messageSearch: false,
+        },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+    render(<RealFocusGate />)
+
+    fireEvent.click(screen.getByRole('button', { name: '开始能力研究' }))
+
+    expect(
+      await screen.findByText(
+        '当前能力报告没有固定 Profile，无法安全生成授权命令。请先固定 lark-cli Profile，再重新检查。',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/^lark-cli --profile/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '重新检查飞书授权' })).toBeEnabled()
+    expect(authenticateReadPlan).not.toHaveBeenCalled()
   })
 
   it('requires an explicit passkey registration ceremony before plan review', async () => {
