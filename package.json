@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
-    "qa:visual": "node scripts/visual-qa.mjs"
+    "qa:visual": "pnpm build && tsx scripts/visual-qa.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.8",
