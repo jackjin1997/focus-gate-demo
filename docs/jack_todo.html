@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>专注之门 · jack_todo</title>
+<style>
+  :root {
+    --bg: #fbfaf6; --bg-2: #ffffff; --bg-3: #f3f1eb;
+    --line: #ebe8df; --line-2: #d3cfc1;
+    --fg: #1a1815; --fg-2: #5a5648; --fg-3: #8a857a;
+    --accent: #1f7a3a; --accent-2: #5b21b6; --warn: #c2410c; --good: #15803d; --danger: #b91c1c;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  body { line-height: 1.55; font-size: 15.5px; }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+  a:hover { opacity: .8; }
+  h1, h2, h3, h4 { font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin: 0; }
+  h1 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.025em; }
+  h2 { font-size: 20px; margin-top: 40px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 12px; }
+  h2 .num { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 500; }
+  h3 { font-size: 16px; margin: 20px 0 10px; color: var(--fg-2); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  p { margin: 8px 0; }
+  small, .meta { color: var(--fg-3); font-size: 13px; }
+  .mono { font-family: var(--mono); }
+  code { font-family: var(--mono); font-size: 13px; background: var(--bg-3); padding: 1px 6px; border-radius: 4px; color: var(--accent); }
+  mark { background: #fef3c7; color: #1a1815; padding: 1px 4px; border-radius: 3px; box-shadow: inset 0 0 0 1px #fde68a; }
+
+  .container { max-width: 880px; margin: 0 auto; padding: 48px 24px 100px; }
+
+  /* HEADER */
+  header.top { padding-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border: 1px solid var(--line-2); border-radius: 99px; font-family: var(--mono); font-size: 11px; color: var(--fg-2); }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .header-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+
+  /* PROGRESS */
+  .progress-card { margin-top: 22px; background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+  .progress-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .progress-num { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; }
+  .progress-num small { color: var(--fg-3); font-weight: 500; }
+  .progress-bar { margin-top: 12px; height: 6px; background: var(--bg-3); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s ease; }
+
+  /* SPRINT */
+  .sprint-meta { background: var(--bg-2); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin: 14px 0 22px; }
+  .sprint-meta b { color: var(--accent); }
+  .sprint-meta ul { margin: 8px 0 0; padding-left: 18px; }
+  .sprint-meta li { margin: 4px 0; color: var(--fg-2); font-size: 14.5px; }
+
+  /* TODO ITEM */
+  .todo-list { list-style: none; padding: 0; margin: 0; }
+  .todo-item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; }
+  .todo-item:last-child { border-bottom: none; }
+  .todo-item:hover { background: rgba(31, 122, 58, 0.03); }
+  .todo-checkbox { flex-shrink: 0; width: 18px; height: 18px; margin-top: 3px; border: 1.5px solid var(--line-2); border-radius: 4px; background: var(--bg-2); display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .todo-checkbox::after { content: ""; width: 0; height: 0; border-radius: 1px; }
+  .todo-item.done .todo-checkbox { background: var(--accent); border-color: var(--accent); }
+  .todo-item.done .todo-checkbox::after { content: ""; width: 4px; height: 8px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); border-radius: 0; }
+  .todo-text { flex: 1; color: var(--fg); }
+  .todo-item.done .todo-text { color: var(--fg-3); text-decoration: line-through; }
+  .todo-text small { display: block; color: var(--fg-3); font-size: 13px; margin-top: 3px; }
+  .todo-text small.warn { color: var(--warn); }
+
+  /* DECISION TABLE */
+  .decision-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .decision-table th, .decision-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .decision-table th { color: var(--fg-2); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--line-2); }
+
+  /* GROUPS */
+  .group { margin-top: 28px; }
+  .group-title { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+  .group-title h3 { margin: 0; }
+  .group-count { font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
+
+  /* RESET BUTTON */
+  .reset-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 6px; color: var(--fg-2); cursor: pointer; font-size: 13px; font-family: var(--sans); margin-top: 16px; }
+  .reset-btn:hover { background: var(--bg-3); color: var(--danger); border-color: var(--danger); }
+
+  footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--fg-3); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="top">
+    <h1>专注之门 · jack_todo</h1>
+    <p class="meta" style="margin-top: 8px;">单一 source-of-truth · 跨 session 接力先看这里</p>
+    <div class="header-meta">
+      <span class="pill"><span class="dot"></span> 当前 sprint: <em>独立化与 MVP 收口</em></span>
+      <span class="pill"><em>2026-07-26 → 完成验证</em></span>
+    </div>
+
+    <div class="progress-card">
+      <div class="progress-top">
+        <div>
+          <div class="progress-num"><span id="done-count">0</span><small> / </small><span id="total-count">0</span></div>
+          <div class="meta">活跃项完成数</div>
+        </div>
+        <div class="meta" id="progress-percent" style="font-family: var(--mono); font-size: 16px; color: var(--accent); font-weight: 600;">0%</div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%;"></div></div>
+    </div>
+  </header>
+
+  <h2><span class="num">🔥</span> 当前 Sprint · 独立化与 MVP 收口</h2>
+
+  <div class="sprint-meta">
+    <p><b>目标</b>：把专注之门从 jack-wiki 中迁成独立仓库，并把本轮批准的 MVP 做到测试、构建、真实模式安全检查和公开样机验证全部通过。</p>
+    <p style="margin-top: 10px;"><b>核心约束</b>：</p>
+    <ul>
+      <li>未经用户审阅批准，不跨过读取确认墙，不执行飞书写操作。</li>
+      <li>公开 Vercel 部署始终是样机模式；真实模式只绑定本机回环地址。</li>
+      <li>“做完”以本轮批准的 MVP 验收标准为边界，不把 README 中明确列出的后续能力偷偷扩进来。</li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">
+      <h3>发现与设计门</h3>
+      <span class="group-count" data-count="discovery">—</span>
+    </div>
+    <ul class="todo-list" data-group="discovery">
+      <li class="todo-item" data-id="discovery-spec">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>提交用户批准的收口规格与实施计划</b>
+          <small>规格中不得留 TBD、TODO 或互相冲突的验收口径。</small>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">
+      <h3>TDD 实施与收口</h3>
+      <span class="group-count" data-count="implementation">—</span>
+    </div>
+    <ul class="todo-list" data-group="implementation">
+      <li class="todo-item" data-id="implementation-red">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>用失败测试锁定批准的功能缺口</b>
+          <small>公共 API、授权边界和核心状态机遵循红—绿—重构。</small>
+        </div>
+      </li>
+      <li class="todo-item" data-id="implementation-green">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>实现并重构 MVP 缺口</b>
+          <small>保持模块边界、强类型和正文不落盘约束。</small>
+        </div>
+      </li>
+      <li class="todo-item" data-id="implementation-docs">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>同步 README、独立项目文档与运行说明</b>
+          <small>移除对 jack-wiki 隐式上下文的依赖。</small>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <div class="group">
+    <div class="group-title">
+      <h3>验证与交付</h3>
+      <span class="group-count" data-count="delivery">—</span>
+    </div>
+    <ul class="todo-list" data-group="delivery">
+      <li class="todo-item" data-id="delivery-quality">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>通过测试、类型检查与生产构建</b>
+          <small><code>pnpm test</code>、<code>pnpm typecheck</code>、<code>pnpm build</code>。</small>
+        </div>
+      </li>
+      <li class="todo-item" data-id="delivery-visual">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>完成桌面与移动端视觉验证</b>
+          <small>公开样机走完整流程；真实模式自动化停在读取确认墙之前。</small>
+        </div>
+      </li>
+      <li class="todo-item" data-id="delivery-runtime">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>完成真实模式安全冒烟</b>
+          <small>验证回环绑定、同源、授权一次性消费、重放防护与正文不落盘。</small>
+        </div>
+      </li>
+      <li class="todo-item" data-id="delivery-release">
+        <span class="todo-checkbox"></span>
+        <div class="todo-text">
+          <b>提交独立仓库并验证公开部署</b>
+          <small class="warn">⚠ 只有保存版本与验证全部通过后才更新生产部署。</small>
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <!-- COMPLETED -->
+  <h2><span class="num">✅</span> 已完成</h2>
+  <ul class="todo-list">
+    <li class="todo-item done" data-id="discovery-scope" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>确认本轮“做完”的 MVP 边界</b>
+        <small>用户选择 A：交付只读 MVP；完整飞书守门和原生 macOS Companion 延后。</small>
+      </div>
+    </li>
+    <li class="todo-item done" data-id="discovery-audit" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>审计仓库、规格、提交历史与现有测试</b>
+        <small>107 项测试和生产构建通过；发现 lark-cli 1.0.68 身份契约漂移、视觉 QA 不会自启动预览服务、真实用户 OAuth 缺失。</small>
+      </div>
+    </li>
+    <li class="todo-item done" data-id="done-init" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">建立 docs/jack_todo.html · 项目执行 source-of-truth 启用</div>
+    </li>
+  </ul>
+
+  <!-- LATER -->
+  <h2><span class="num">📋</span> Sprint 之后的事</h2>
+  <table class="decision-table">
+    <thead>
+      <tr><th>事项</th><th>触发条件</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>完整飞书守门：持续轮询、分诊、KNOCK、退出补偿、交接摘要</td><td>只读纵切在真实租户完成覆盖与漏报校准后</td></tr>
+      <tr><td>飞书状态、日历时段与有界自动确认收到</td><td>逐项新增精确写授权、预览和回滚契约后</td></tr>
+      <tr><td>签名 macOS Companion、Keychain 与系统专注模式桥接</td><td>需要抵抗同机恶意进程并进入正式分发时</td></tr>
+    </tbody>
+  </table>
+
+  <button class="reset-btn" onclick="resetState()">↺ 重置勾选状态</button>
+
+  <footer>
+    <div>
+      专注之门 · jack_todo · v1
+      <div class="meta" style="margin-top: 4px;">勾选状态用 localStorage 持久化在本机浏览器</div>
+    </div>
+    <div></div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = 'focus-gate-demo-jack-todo-v1';
+
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+    catch { return {}; }
+  }
+  function saveState(state) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  function applyState() {
+    const state = loadState();
+    document.querySelectorAll('.todo-item').forEach(item => {
+      const id = item.dataset.id;
+      const locked = item.dataset.locked === '1';
+      if (locked) return;
+      if (state[id]) item.classList.add('done');
+      else item.classList.remove('done');
+    });
+    updateCounts();
+  }
+
+  function updateCounts() {
+    let totalActionable = 0, doneActionable = 0;
+    const groupStats = {};
+
+    document.querySelectorAll('.todo-list').forEach(list => {
+      const group = list.dataset.group;
+      let total = 0, done = 0;
+      list.querySelectorAll('.todo-item').forEach(item => {
+        if (item.dataset.locked === '1') return;
+        total++;
+        if (item.classList.contains('done')) done++;
+      });
+      if (group) groupStats[group] = { total, done };
+    });
+
+    document.querySelectorAll('[data-count]').forEach(el => {
+      const g = el.dataset.count;
+      if (groupStats[g]) {
+        el.textContent = `${groupStats[g].done} / ${groupStats[g].total}`;
+        el.style.color = groupStats[g].done === groupStats[g].total && groupStats[g].total > 0 ? 'var(--accent)' : 'var(--fg-3)';
+      }
+    });
+
+    Object.values(groupStats).forEach(s => {
+      totalActionable += s.total;
+      doneActionable += s.done;
+    });
+
+    document.getElementById('done-count').textContent = doneActionable;
+    document.getElementById('total-count').textContent = totalActionable;
+    const pct = totalActionable === 0 ? 0 : Math.round((doneActionable / totalActionable) * 100);
+    document.getElementById('progress-percent').textContent = pct + '%';
+    document.getElementById('progress-fill').style.width = pct + '%';
+  }
+
+  document.querySelectorAll('.todo-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (item.dataset.locked === '1') return;
+      const state = loadState();
+      const id = item.dataset.id;
+      if (state[id]) { delete state[id]; item.classList.remove('done'); }
+      else { state[id] = true; item.classList.add('done'); }
+      saveState(state);
+      updateCounts();
+    });
+  });
+
+  window.resetState = function () {
+    if (!confirm('确定重置所有勾选状态？')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    applyState();
+  };
+
+  applyState();
+})();
+</script>
+</body>
+</html>
