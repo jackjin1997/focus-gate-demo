@@ -26,6 +26,14 @@ export const parseCapabilityReview = (outputs: {
   const identities = isRecord(authStatus.identities)
     ? authStatus.identities
     : null
+
+  if (
+    !identities &&
+    !Object.prototype.hasOwnProperty.call(authStatus, 'identity')
+  ) {
+    throw invalidCapabilityResponse('capabilities.auth-status')
+  }
+
   let identity = rootIdentity
   let userOpenId: string | null = null
 
@@ -56,6 +64,10 @@ export const parseCapabilityReview = (outputs: {
     scopeData?.userScopes,
     scopeData?.scopes,
   ].find(Array.isArray)
+
+  if (!rawScopes) {
+    throw invalidCapabilityResponse('capabilities.scopes')
+  }
 
   return {
     cliVersion: extractVersion(outputs.version),
@@ -134,13 +146,17 @@ const normalizeIdentity = (
 }
 
 const extractEventKeys = (value: unknown): string[] => {
-  const candidates = Array.isArray(value)
-    ? value
-    : isRecord(value) && Array.isArray(value.items)
-      ? value.items
-      : isRecord(value) && Array.isArray(value.events)
-        ? value.events
-        : []
+  let candidates: unknown[]
+
+  if (Array.isArray(value)) {
+    candidates = value
+  } else if (isRecord(value) && Array.isArray(value.items)) {
+    candidates = value.items
+  } else if (isRecord(value) && Array.isArray(value.events)) {
+    candidates = value.events
+  } else {
+    throw invalidCapabilityResponse('capabilities.events')
+  }
 
   return uniqueStrings(
     candidates.map((candidate) =>
@@ -304,5 +320,17 @@ const invalidMessageResponse = (): LarkCliAdapterError =>
   new LarkCliAdapterError({
     code: 'INVALID_RESPONSE',
     operation: 'messages.search',
+    retryable: false,
+  })
+
+const invalidCapabilityResponse = (
+  operation:
+    | 'capabilities.auth-status'
+    | 'capabilities.scopes'
+    | 'capabilities.events',
+): LarkCliAdapterError =>
+  new LarkCliAdapterError({
+    code: 'INVALID_RESPONSE',
+    operation,
     retryable: false,
   })

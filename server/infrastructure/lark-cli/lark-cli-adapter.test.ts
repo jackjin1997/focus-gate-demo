@@ -258,6 +258,59 @@ describe('LarkCliAdapter capability review', () => {
 
     expect(review.scopes).toEqual(['im:message:readonly', 'search:message'])
   })
+
+  it.each([
+    {
+      source: 'auth status',
+      operation: 'capabilities.auth-status',
+      authStatus: { unexpected: 'secret-auth-payload' },
+      scopes: { userScopes: [] },
+      events: [],
+      secret: 'secret-auth-payload',
+    },
+    {
+      source: 'scopes',
+      operation: 'capabilities.scopes',
+      authStatus: { identity: 'bot' },
+      scopes: { unexpected: 'secret-scopes-payload' },
+      events: [],
+      secret: 'secret-scopes-payload',
+    },
+    {
+      source: 'events',
+      operation: 'capabilities.events',
+      authStatus: { identity: 'bot' },
+      scopes: { userScopes: [] },
+      events: { unexpected: 'secret-events-payload' },
+      secret: 'secret-events-payload',
+    },
+  ])('rejects an unrecognized $source response without exposing it', async ({
+    operation,
+    authStatus,
+    scopes,
+    events,
+    secret,
+  }) => {
+    const runner = new RecordingRunner([
+      success('lark-cli version 1.0.68'),
+      success(authStatus),
+      success(scopes),
+      success(events),
+    ])
+    const logger = { log: vi.fn() }
+
+    const error = await new LarkCliAdapter({ runner, logger })
+      .reviewCapabilities()
+      .catch((caught: unknown) => caught)
+
+    expect(error).toMatchObject({
+      code: 'INVALID_RESPONSE',
+      operation,
+      retryable: false,
+    })
+    expect(JSON.stringify(error)).not.toContain(secret)
+    expect(JSON.stringify(logger.log.mock.calls)).not.toContain(secret)
+  })
 })
 
 describe('LarkCliAdapter recent message search', () => {
