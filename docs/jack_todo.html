@@ -120,54 +120,10 @@
 
   <div class="group">
     <div class="group-title">
-      <h3>TDD 实施与收口</h3>
-      <span class="group-count" data-count="implementation">—</span>
-    </div>
-    <ul class="todo-list" data-group="implementation">
-      <li class="todo-item" data-id="implementation-red">
-        <span class="todo-checkbox"></span>
-        <div class="todo-text">
-          <b>用失败测试锁定批准的功能缺口</b>
-          <small>公共 API、授权边界和核心状态机遵循红—绿—重构。</small>
-        </div>
-      </li>
-      <li class="todo-item" data-id="implementation-green">
-        <span class="todo-checkbox"></span>
-        <div class="todo-text">
-          <b>实现并重构 MVP 缺口</b>
-          <small>保持模块边界、强类型和正文不落盘约束。</small>
-        </div>
-      </li>
-      <li class="todo-item" data-id="implementation-docs">
-        <span class="todo-checkbox"></span>
-        <div class="todo-text">
-          <b>同步 README、独立项目文档与运行说明</b>
-          <small>移除对 jack-wiki 隐式上下文的依赖。</small>
-        </div>
-      </li>
-    </ul>
-  </div>
-
-  <div class="group">
-    <div class="group-title">
       <h3>验证与交付</h3>
       <span class="group-count" data-count="delivery">—</span>
     </div>
     <ul class="todo-list" data-group="delivery">
-      <li class="todo-item" data-id="delivery-quality">
-        <span class="todo-checkbox"></span>
-        <div class="todo-text">
-          <b>通过测试、类型检查与生产构建</b>
-          <small><code>pnpm test</code>、<code>pnpm typecheck</code>、<code>pnpm build</code>。</small>
-        </div>
-      </li>
-      <li class="todo-item" data-id="delivery-visual">
-        <span class="todo-checkbox"></span>
-        <div class="todo-text">
-          <b>完成桌面与移动端视觉验证</b>
-          <small>公开样机走完整流程；真实模式自动化停在读取确认墙之前。</small>
-        </div>
-      </li>
       <li class="todo-item" data-id="delivery-runtime">
         <span class="todo-checkbox"></span>
         <div class="todo-text">
@@ -188,6 +144,41 @@
   <!-- COMPLETED -->
   <h2><span class="num">✅</span> 已完成</h2>
   <ul class="todo-list">
+    <li class="todo-item done" data-id="delivery-quality" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>通过测试、类型检查与生产构建</b>
+        <small><code>pnpm test</code>、<code>pnpm typecheck</code>、<code>pnpm build</code> 均已通过；无凭据 CI 配置覆盖同一质量链路。</small>
+      </div>
+    </li>
+    <li class="todo-item done" data-id="delivery-visual" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>完成桌面与移动端视觉验证</b>
+        <small>单命令 QA 已覆盖桌面、移动端、reduced-motion、布局、控制台错误与外部请求，并验证临时 preview 自动清理。</small>
+      </div>
+    </li>
+    <li class="todo-item done" data-id="implementation-docs" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>同步 README、独立项目文档与运行说明</b>
+        <small>仓库边界、精确 OAuth、受管视觉 QA、无凭据 CI 与明确延期范围均已自包含，不依赖 jack-wiki。</small>
+      </div>
+    </li>
+    <li class="todo-item done" data-id="implementation-green" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>实现并重构 MVP 缺口</b>
+        <small>已收口当前 Lark CLI 契约、最小 OAuth 指引和受管视觉 QA 生命周期，保持强类型与读取墙关闭。</small>
+      </div>
+    </li>
+    <li class="todo-item done" data-id="implementation-red" data-locked="1">
+      <span class="todo-checkbox"></span>
+      <div class="todo-text">
+        <b>用失败测试锁定批准的功能缺口</b>
+        <small>CLI 契约、OAuth 命令与 UI、预览进程竞争和占用端口均由失败测试先行锁定。</small>
+      </div>
+    </li>
     <li class="todo-item done" data-id="discovery-spec" data-locked="1">
       <span class="todo-checkbox"></span>
       <div class="todo-text">
