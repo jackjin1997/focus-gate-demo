@@ -45,7 +45,15 @@
 
 ## 本地运行
 
-需要 Node.js 24 或 25、pnpm 10.29.1，并已安装 `lark-cli`。当前真实验证版本是 `lark-cli 1.0.68`；测试夹具也覆盖仓库曾使用的历史 1.x 响应形状，但这不等于承诺兼容所有 1.x 版本。
+需要 Node.js 24 或 25、pnpm 10.29.1 和 `lark-cli`。当前真实验证版本是 `lark-cli 1.0.68`；测试夹具也覆盖仓库曾使用的历史 1.x 响应形状，但这不等于承诺兼容所有 1.x 版本。
+
+真实模式默认固定执行 Apple Silicon Homebrew 路径 `/opt/homebrew/bin/lark-cli`，不会从 `PATH` 搜索。Intel Mac、非 Homebrew 安装或自定义位置必须用绝对路径覆盖：
+
+```bash
+LARK_CLI_PATH=/absolute/path/to/lark-cli pnpm local
+```
+
+默认路径可直接启动：
 
 ```bash
 pnpm install
@@ -60,7 +68,7 @@ pnpm local
 lark-cli --profile '<能力报告中的固定 Profile>' auth login --scope 'search:message'
 ```
 
-用户点击“开始能力研究”时，Companion 会把当时的 active profile 固定到本机进程，后续命令不再跟随默认 profile 切换。运行器会为自己的只读子进程清理代理变量；用户在自己的 shell 中执行上述交互式登录命令，无需添加 `LARK_CLI_NO_PROXY=1`。
+用户点击“开始能力研究”时，Companion 会把当时的 active profile 固定到本机进程，后续命令不再跟随默认 profile 切换。运行器会为自己的只读子进程清理代理变量；用户在自己的 shell 中执行上述交互式登录命令，无需添加 `LARK_CLI_NO_PROXY=1`。若 `lark-cli` 不在用户 shell 的 `PATH` 中，执行登录时也要把命令开头替换为同一个绝对路径。
 
 这条命令只补充 `search:message` 权限，不会读取任何消息。完成授权不等于批准读取：回到界面点击“重新检查飞书授权”，后续仍需审阅精确读取计划，并通过 Touch ID 明确批准一次性读取。
 
