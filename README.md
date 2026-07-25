@@ -45,7 +45,7 @@
 
 ## 本地运行
 
-需要 Node.js 24 或 25、pnpm 10.29.1 和 `lark-cli`。当前真实验证版本是 `lark-cli 1.0.68`；测试夹具也覆盖仓库曾使用的历史 1.x 响应形状，但这不等于承诺兼容所有 1.x 版本。
+需要 Node.js 24 或 25、pnpm 10.29.1 和 `lark-cli`。当前真实验证版本是 `lark-cli 1.0.68`；读取墙只把 `auth status` 中已验证且可用的用户令牌 scope 与 `auth scopes` 返回的应用权限目录交集视为有效权限，根级 Bot 验证不会代替用户验证。测试夹具也覆盖仓库曾使用的历史 1.x 响应形状，但这不等于承诺兼容所有 1.x 版本。
 
 真实模式默认固定执行 Apple Silicon Homebrew 路径 `/opt/homebrew/bin/lark-cli`，不会从 `PATH` 搜索。Intel Mac、非 Homebrew 安装或自定义位置必须用绝对路径覆盖：
 

@@ -71,11 +71,12 @@ lark-cli event list --json
 
 解析器把 CLI 输出转换为现有 `CapabilityReview`：
 
-- 优先读取 `identities.user.status`、`identities.user.openId` 和验证结果。
-- 只有用户身份状态为可用、验证成功且存在具体用户 `openId` 时，`authenticated` 才能为真。
+- 当前契约只从 `identities.user` 读取用户令牌状态；只有 `status` 为 `ready` / `needs_refresh`、`available === true`、`verified === true` 且存在具体用户 `openId` 时，`authenticated` 才能为真。
+- 根级 `verified` 只描述当前默认身份；即使 Bot 已验证，也不能代替 `identities.user.verified`。
 - Bot 可用不能推出用户已授权。
 - 记忆中的用户名或 `openId` 不能推出用户令牌有效。
-- `auth scopes` 同时兼容当前顶层 `userScopes` 和历史信封结构。
+- 当前 `identities.user.scope` 是用户令牌的空白分隔 scope；`auth scopes` 返回应用权限目录。界面可用权限必须取用户令牌 scope 与应用权限目录的交集。
+- `auth scopes` 的应用权限目录同时兼容当前顶层 `userScopes` 和历史信封结构；无 `identities` 的历史顶层用户契约保留原有规范化方式。
 - 无法确定身份、权限或 JSON 契约时失败关闭，界面不得显示可读取。
 
 ### 4.3 读取计划与授权墙

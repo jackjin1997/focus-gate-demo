@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript 5、React 19、Hono、Vitest、Playwright、Vite、Node.js 24/25、pnpm 10、lark-cli 1.x、GitHub Actions、Vercel。
 
+> **实施勘误（2026-07-26）：** 官方 `lark-cli 1.0.68` 源码与本机输出证明，根级 `verified` 不能代表嵌套用户已验证，`auth scopes` 返回的是应用权限目录而非当前用户令牌权限。Task 1 下方的早期示例保留为历史计划记录；实际实现以 `identities.user.available/verified/openId/scope` 和“用户令牌 scope ∩ 应用 scope”契约为准。
+
 ---
 
 ## 文件结构

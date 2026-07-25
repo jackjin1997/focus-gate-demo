@@ -34,47 +34,22 @@ export const parseCapabilityReview = (outputs: {
     throw invalidCapabilityResponse('capabilities.auth-status')
   }
 
-  let identity = rootIdentity
-  let userOpenId: string | null = null
-
-  if (identities) {
-    const nestedUser = isRecord(identities.user) ? identities.user : null
-    const nestedUserOpenId = nestedUser
-      ? firstNonBlankString(nestedUser.openId, nestedUser.open_id)
-      : undefined
-
-    if (
-      nestedUser?.status === 'ready' &&
-      authStatus.verified !== false &&
-      nestedUserOpenId
-    ) {
-      identity = 'user'
-      userOpenId = nestedUserOpenId
-    }
-  } else if (rootIdentity === 'user') {
-    userOpenId =
-      firstNonBlankString(authStatus.userOpenId, authStatus.user_open_id) ??
-      null
-  }
-
-  const scopeData = isRecord(scopeEnvelope.data) ? scopeEnvelope.data : null
-  const rawScopes = [
-    scopeEnvelope.userScopes,
-    scopeEnvelope.scopes,
-    scopeData?.userScopes,
-    scopeData?.scopes,
-  ].find(Array.isArray)
-
-  if (!rawScopes) {
-    throw invalidCapabilityResponse('capabilities.scopes')
-  }
+  const appScopes = normalizeAppScopes(scopeEnvelope)
+  const normalizedIdentity = identities
+    ? normalizeCurrentIdentity(rootIdentity, identities)
+    : normalizeLegacyIdentity(rootIdentity, authStatus)
+  const scopes = normalizedIdentity.currentContract
+    ? normalizedIdentity.authenticated
+      ? intersectScopes(normalizedIdentity.tokenScopes, appScopes)
+      : []
+    : appScopes
 
   return {
     cliVersion: extractVersion(outputs.version),
-    authenticated: identity === 'user' && userOpenId !== null,
-    identity,
-    userOpenId,
-    scopes: Object.freeze(uniqueStrings(rawScopes).sort()),
+    authenticated: normalizedIdentity.authenticated,
+    identity: normalizedIdentity.identity,
+    userOpenId: normalizedIdentity.userOpenId,
+    scopes: Object.freeze(scopes),
     eventKeys: Object.freeze(extractEventKeys(eventEnvelope).sort()),
   }
 }
@@ -143,6 +118,107 @@ const normalizeIdentity = (
   }
 
   return 'unknown'
+}
+
+interface NormalizedCapabilityIdentity {
+  readonly authenticated: boolean
+  readonly currentContract: boolean
+  readonly identity: CapabilityReview['identity']
+  readonly tokenScopes: readonly string[]
+  readonly userOpenId: string | null
+}
+
+const normalizeCurrentIdentity = (
+  rootIdentity: CapabilityReview['identity'],
+  identities: JsonRecord,
+): NormalizedCapabilityIdentity => {
+  if (
+    Object.prototype.hasOwnProperty.call(identities, 'user') &&
+    !isRecord(identities.user)
+  ) {
+    throw invalidCapabilityResponse('capabilities.auth-status')
+  }
+
+  const nestedUser = isRecord(identities.user) ? identities.user : null
+  const tokenScopes = normalizeTokenScopes(nestedUser?.scope)
+  const userOpenId = nestedUser
+    ? firstTrimmedString(nestedUser.openId, nestedUser.open_id)
+    : undefined
+  const statusAllowsUse =
+    nestedUser?.status === 'ready' || nestedUser?.status === 'needs_refresh'
+  const authenticated =
+    statusAllowsUse &&
+    nestedUser?.available === true &&
+    nestedUser?.verified === true &&
+    userOpenId !== undefined
+
+  return {
+    authenticated,
+    currentContract: true,
+    identity: authenticated ? 'user' : rootIdentity,
+    tokenScopes,
+    userOpenId: authenticated ? userOpenId : null,
+  }
+}
+
+const normalizeLegacyIdentity = (
+  rootIdentity: CapabilityReview['identity'],
+  authStatus: JsonRecord,
+): NormalizedCapabilityIdentity => {
+  const userOpenId =
+    rootIdentity === 'user'
+      ? firstTrimmedString(authStatus.userOpenId, authStatus.user_open_id) ??
+        null
+      : null
+
+  return {
+    authenticated: rootIdentity === 'user' && userOpenId !== null,
+    currentContract: false,
+    identity: rootIdentity,
+    tokenScopes: [],
+    userOpenId,
+  }
+}
+
+const normalizeTokenScopes = (value: unknown): readonly string[] => {
+  if (value === undefined || value === null) {
+    return []
+  }
+
+  if (typeof value !== 'string') {
+    throw invalidCapabilityResponse('capabilities.auth-status')
+  }
+
+  return Object.freeze(
+    [...new Set(value.split(/\s+/).filter(Boolean))].sort(),
+  )
+}
+
+const normalizeAppScopes = (scopeEnvelope: JsonRecord): readonly string[] => {
+  const scopeData = isRecord(scopeEnvelope.data) ? scopeEnvelope.data : null
+  const rawScopes = [
+    scopeEnvelope.userScopes,
+    scopeEnvelope.scopes,
+    scopeData?.userScopes,
+    scopeData?.scopes,
+  ].find(Array.isArray)
+
+  if (
+    !rawScopes ||
+    !rawScopes.every((scope): scope is string => typeof scope === 'string')
+  ) {
+    throw invalidCapabilityResponse('capabilities.scopes')
+  }
+
+  return Object.freeze([...new Set(rawScopes)].sort())
+}
+
+const intersectScopes = (
+  tokenScopes: readonly string[],
+  appScopes: readonly string[],
+): readonly string[] => {
+  const appScopeSet = new Set(appScopes)
+  return Object.freeze(tokenScopes.filter((scope) => appScopeSet.has(scope)))
 }
 
 const extractEventKeys = (value: unknown): string[] => {
@@ -312,6 +388,11 @@ const firstNonBlankString = (...values: unknown[]): string | undefined =>
   values.find((value): value is string =>
     typeof value === 'string' && value.trim().length > 0,
   )
+
+const firstTrimmedString = (...values: unknown[]): string | undefined => {
+  const value = firstNonBlankString(...values)
+  return value?.trim()
+}
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
