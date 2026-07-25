@@ -119,7 +119,9 @@ describe('RealFocusGate', () => {
     expect(screen.getByText('当前用户全部可见会话')).toBeInTheDocument()
     expect(screen.getAllByText(`sha256:${'b'.repeat(64)}`).length).toBeGreaterThan(0)
     expect(screen.getByText('0 项写入')).toBeInTheDocument()
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' })
+    await waitFor(() => {
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' })
+    })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
