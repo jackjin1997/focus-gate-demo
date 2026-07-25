@@ -5,7 +5,10 @@ import { resolve } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { startManagedPreview } from './managed-preview'
+import {
+  startManagedPreview,
+  type PreviewFetcher,
+} from './managed-preview'
 
 class FakePreviewProcess extends EventEmitter {
   exitCode: number | null = null
@@ -19,6 +22,17 @@ class FakePreviewProcess extends EventEmitter {
   }
 }
 
+function createLocalFetch(readiness: PreviewFetcher) {
+  let preflight = true
+  return vi.fn<PreviewFetcher>((url, init) => {
+    if (preflight) {
+      preflight = false
+      return Promise.reject(new Error('connection refused'))
+    }
+    return readiness(url, init)
+  })
+}
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -28,22 +42,68 @@ describe('startManagedPreview', () => {
     const spawn = vi.fn(() => {
       throw new Error('external previews must not spawn')
     })
+    const fetch = vi.fn(() => {
+      throw new Error('external previews must not probe localhost')
+    })
 
     const target = await startManagedPreview({
       externalUrl: 'https://focus-gate.example.test',
+      fetch,
       spawn,
     })
 
     expect(target.baseUrl).toBe('https://focus-gate.example.test')
     expect(target.managed).toBe(false)
     await expect(target.stop()).resolves.toBeUndefined()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('rejects an existing healthy local service without spawning Vite', async () => {
+    const spawn = vi.fn(() => new FakePreviewProcess())
+
+    const outcome = await startManagedPreview({
+      fetch: vi.fn(async () => ({ ok: true })),
+      spawn,
+    }).catch((error: unknown) => error)
+
+    expect(outcome).toEqual(
+      expect.objectContaining({
+        message: 'Managed preview port is already in use.',
+      }),
+    )
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('aborts and fails closed when the local port probe hangs', async () => {
+    vi.useFakeTimers()
+    const spawn = vi.fn(() => new FakePreviewProcess())
+    let preflightSignal: AbortSignal | undefined
+    const fetch = vi.fn<PreviewFetcher>((_url, init) => {
+      preflightSignal = init.signal
+      return new Promise<{ ok: boolean }>(() => undefined)
+    })
+
+    const outcomePromise = startManagedPreview({
+      fetch,
+      spawn,
+      preflightTimeoutMs: 20,
+    }).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(preflightSignal?.aborted).toBe(true)
+    await expect(outcomePromise).resolves.toEqual(
+      expect.objectContaining({
+        message: 'Managed preview port probe timed out.',
+      }),
+    )
     expect(spawn).not.toHaveBeenCalled()
   })
 
   it('starts Vite with fixed argv and waits for an OK response', async () => {
     const child = new FakePreviewProcess()
     const spawn = vi.fn(() => child)
-    const fetch = vi.fn(async () => ({ ok: true }))
+    const fetch = createLocalFetch(async () => ({ ok: true }))
     const cwd = '/workspace/focus-gate'
 
     const target = await startManagedPreview({ cwd, spawn, fetch })
@@ -83,7 +143,7 @@ describe('startManagedPreview', () => {
 
   it('fails with a fixed error when Vite exits before readiness', async () => {
     const child = new FakePreviewProcess()
-    const fetch = vi.fn(
+    const fetch = createLocalFetch(
       () => new Promise<{ ok: boolean }>(() => undefined),
     )
 
@@ -105,7 +165,7 @@ describe('startManagedPreview', () => {
 
     await expect(startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(
+      fetch: createLocalFetch(
         () => new Promise<{ ok: boolean }>(() => undefined),
       ),
     })).rejects.toThrow('Managed preview exited before becoming ready.')
@@ -118,7 +178,7 @@ describe('startManagedPreview', () => {
 
     const outcome = await startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(async () => ({ ok: true })),
+      fetch: createLocalFetch(async () => ({ ok: true })),
     }).catch((error: unknown) => error)
 
     expect(outcome).toEqual(
@@ -134,7 +194,7 @@ describe('startManagedPreview', () => {
 
     const outcome = await startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(async () => ({
+      fetch: createLocalFetch(async () => ({
         get ok(): boolean {
           child.exit(1, null)
           return true
@@ -154,6 +214,7 @@ describe('startManagedPreview', () => {
     const secret = 'preview-secret-output'
 
     const outcome = await startManagedPreview({
+      fetch: createLocalFetch(async () => ({ ok: true })),
       spawn: vi.fn(() => {
         throw new Error(secret)
       }),
@@ -174,7 +235,7 @@ describe('startManagedPreview', () => {
       child.exit(null, signal)
       return true
     })
-    const fetch = vi.fn(async () => ({ ok: false }))
+    const fetch = createLocalFetch(async () => ({ ok: false }))
     const timers = {
       setTimeout: vi.fn(
         (callback: () => void, delayMs: number) =>
@@ -211,7 +272,7 @@ describe('startManagedPreview', () => {
     const child = new FakePreviewProcess()
     const target = await startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(async () => ({ ok: true })),
+      fetch: createLocalFetch(async () => ({ ok: true })),
       terminationGraceMs: 20,
     })
 
@@ -234,7 +295,7 @@ describe('startManagedPreview', () => {
     const child = new FakePreviewProcess()
     const target = await startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(async () => ({ ok: true })),
+      fetch: createLocalFetch(async () => ({ ok: true })),
       terminationGraceMs: 20,
     })
 
@@ -260,7 +321,7 @@ describe('startManagedPreview', () => {
     })
     const target = await startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(async () => ({ ok: true })),
+      fetch: createLocalFetch(async () => ({ ok: true })),
     })
 
     const outcome = await target.stop().catch(
@@ -281,7 +342,7 @@ describe('startManagedPreview', () => {
 
     const outcomePromise = startManagedPreview({
       spawn: vi.fn(() => child),
-      fetch: vi.fn(async () => ({ ok: false })),
+      fetch: createLocalFetch(async () => ({ ok: false })),
       readinessTimeoutMs: 10,
       terminationGraceMs: 5,
     }).catch((error: unknown) => error)

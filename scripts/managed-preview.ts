@@ -9,9 +9,11 @@ const PROCESS_ENDED = Symbol('process-ended')
 const READINESS_TIMED_OUT = Symbol('readiness-timed-out')
 const POLL_READY = Symbol('poll-ready')
 const TERMINATION_GRACE_ENDED = Symbol('termination-grace-ended')
+const PORT_PROBE_TIMED_OUT = Symbol('port-probe-timed-out')
 const DEFAULT_READINESS_TIMEOUT_MS = 15_000
 const DEFAULT_POLL_INTERVAL_MS = 100
 const DEFAULT_TERMINATION_GRACE_MS = 500
+const DEFAULT_PORT_PROBE_TIMEOUT_MS = 500
 const STOP_ERROR_MESSAGE = 'Managed preview could not be stopped.'
 
 export interface ManagedPreviewTarget {
@@ -69,6 +71,7 @@ export interface ManagedPreviewOptions {
   readonly readinessTimeoutMs?: number
   readonly pollIntervalMs?: number
   readonly terminationGraceMs?: number
+  readonly preflightTimeoutMs?: number
 }
 
 export async function startManagedPreview(
@@ -92,6 +95,17 @@ export async function startManagedPreview(
     options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
   const terminationGraceMs =
     options.terminationGraceMs ?? DEFAULT_TERMINATION_GRACE_MS
+  const preflightTimeoutMs =
+    options.preflightTimeoutMs ?? DEFAULT_PORT_PROBE_TIMEOUT_MS
+  const portInUse = await probeLocalPort(
+    fetch,
+    timers,
+    preflightTimeoutMs,
+  )
+  if (portInUse) {
+    throw new Error('Managed preview port is already in use.')
+  }
+
   let child: PreviewProcess
   try {
     child = spawn(
@@ -186,6 +200,51 @@ const defaultFetch: PreviewFetcher = (url, init) => fetch(url, init)
 const defaultTimers: PreviewTimers = {
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
   clearTimeout: (timer) => clearTimeout(timer),
+}
+
+async function probeLocalPort(
+  fetch: PreviewFetcher,
+  timers: PreviewTimers,
+  timeoutMs: number,
+): Promise<boolean> {
+  const controller = new AbortController()
+  const timeout = createDelay(
+    timers,
+    timeoutMs,
+    PORT_PROBE_TIMED_OUT,
+  )
+
+  try {
+    let probe: Promise<boolean>
+    try {
+      probe = Promise.resolve(
+        fetch(LOCAL_BASE_URL, { signal: controller.signal }),
+      ).then(
+        (response) => {
+          try {
+            return response.ok
+          } catch {
+            return false
+          }
+        },
+        () => false,
+      )
+    } catch {
+      return false
+    }
+
+    const result = await Promise.race([
+      probe,
+      timeout.promise,
+    ])
+    if (result === PORT_PROBE_TIMED_OUT) {
+      throw new Error('Managed preview port probe timed out.')
+    }
+    return result
+  } finally {
+    timeout.cancel()
+    controller.abort()
+  }
 }
 
 function hasExited(child: PreviewProcess): boolean {
