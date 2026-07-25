@@ -15,8 +15,11 @@ export const CAPABILITY_INVOCATIONS: ReadonlyArray<
   readonly [LarkCliOperation, CommandInvocation]
 > = Object.freeze([
   ['capabilities.version', invocation(['--version'])],
-  ['capabilities.auth-status', invocation(['auth', 'status'])],
-  ['capabilities.scopes', invocation(['auth', 'scopes'])],
+  [
+    'capabilities.auth-status',
+    invocation(['auth', 'status', '--json', '--verify']),
+  ],
+  ['capabilities.scopes', invocation(['auth', 'scopes', '--json'])],
   ['capabilities.events', invocation(['event', 'list', '--json'])],
 ])
 

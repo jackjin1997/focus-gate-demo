@@ -67,12 +67,12 @@ describe('LarkCliAdapter capability review', () => {
       },
       {
         executable: 'lark-cli',
-        args: ['auth', 'status'],
+        args: ['auth', 'status', '--json', '--verify'],
         options: { shell: false },
       },
       {
         executable: 'lark-cli',
-        args: ['auth', 'scopes'],
+        args: ['auth', 'scopes', '--json'],
         options: { shell: false },
       },
       {
@@ -86,11 +86,20 @@ describe('LarkCliAdapter capability review', () => {
 
   it('does not mistake a remembered user id for an active user token', async () => {
     const runner = new RecordingRunner([
-      success('lark-cli version 1.0.26'),
+      success('lark-cli version 1.0.68'),
       success({
         identity: 'bot',
-        userOpenId: 'ou_remembered',
-        note: 'Token does not exist or has been cleared.',
+        verified: true,
+        identities: {
+          bot: {
+            status: 'ready',
+          },
+          user: {
+            status: 'missing',
+            userName: 'Remembered User',
+            openId: 'ou_remembered',
+          },
+        },
       }),
       success({ userScopes: [] }),
       success([]),
@@ -102,7 +111,152 @@ describe('LarkCliAdapter capability review', () => {
     expect(review.identity).toBe('bot')
     expect(review.userOpenId).toBeNull()
     expect(JSON.stringify(review)).not.toContain('ou_remembered')
-    expect(JSON.stringify(review)).not.toContain('Token does not exist')
+    expect(JSON.stringify(review)).not.toContain('Remembered User')
+  })
+
+  it('uses the ready nested user identity selected by fixed --as user commands', async () => {
+    const runner = new RecordingRunner([
+      success('lark-cli version 1.0.68'),
+      success({
+        identity: 'bot',
+        verified: true,
+        identities: {
+          bot: {
+            status: 'ready',
+          },
+          user: {
+            status: 'ready',
+            userName: 'Active User',
+            openId: 'ou_active',
+          },
+        },
+      }),
+      success({ userScopes: ['search:message'] }),
+      success([]),
+    ])
+
+    const review = await new LarkCliAdapter({ runner }).reviewCapabilities()
+
+    expect(review.authenticated).toBe(true)
+    expect(review.identity).toBe('user')
+    expect(review.userOpenId).toBe('ou_active')
+  })
+
+  it('requires a user open id for legacy top-level authentication', async () => {
+    const runner = new RecordingRunner([
+      success('lark-cli version 1.0.26'),
+      success({ identity: 'user' }),
+      success({ userScopes: [] }),
+      success([]),
+    ])
+
+    const review = await new LarkCliAdapter({ runner }).reviewCapabilities()
+
+    expect(review.authenticated).toBe(false)
+    expect(review.identity).toBe('user')
+    expect(review.userOpenId).toBeNull()
+  })
+
+  it.each([
+    {
+      reason: 'user status is unknown',
+      authStatus: {
+        identity: 'user',
+        userOpenId: 'ou_remembered_root',
+        verified: true,
+        identities: {
+          bot: { status: 'ready' },
+          user: { status: 'unknown', openId: 'ou_unknown_status' },
+        },
+      },
+      rejectedOpenIds: ['ou_remembered_root', 'ou_unknown_status'],
+    },
+    {
+      reason: 'verification fails',
+      authStatus: {
+        identity: 'user',
+        userOpenId: 'ou_remembered_root',
+        verified: false,
+        identities: {
+          bot: { status: 'ready' },
+          user: { status: 'ready', openId: 'ou_unverified' },
+        },
+      },
+      rejectedOpenIds: ['ou_remembered_root', 'ou_unverified'],
+    },
+    {
+      reason: 'the user open id is missing',
+      authStatus: {
+        identity: 'user',
+        userOpenId: 'ou_remembered_root',
+        verified: true,
+        identities: {
+          bot: { status: 'ready' },
+          user: { status: 'ready', userName: 'Remembered User' },
+        },
+      },
+      rejectedOpenIds: ['ou_remembered_root'],
+    },
+  ])('fails closed when $reason', async ({ authStatus, rejectedOpenIds }) => {
+    const runner = new RecordingRunner([
+      success('lark-cli version 1.0.68'),
+      success(authStatus),
+      success({ userScopes: [] }),
+      success([]),
+    ])
+
+    const review = await new LarkCliAdapter({ runner }).reviewCapabilities()
+
+    expect(review.authenticated).toBe(false)
+    expect(review.identity).toBe('user')
+    expect(review.userOpenId).toBeNull()
+    for (const rejectedOpenId of rejectedOpenIds) {
+      expect(JSON.stringify(review)).not.toContain(rejectedOpenId)
+    }
+  })
+
+  it.each([
+    {
+      source: 'top-level userScopes',
+      scopeEnvelope: {
+        userScopes: ['search:message', 'im:message:readonly', 'search:message'],
+      },
+    },
+    {
+      source: 'top-level scopes',
+      scopeEnvelope: {
+        scopes: ['search:message', 'im:message:readonly', 'search:message'],
+      },
+    },
+    {
+      source: 'data.userScopes',
+      scopeEnvelope: {
+        data: {
+          userScopes: ['search:message', 'im:message:readonly', 'search:message'],
+        },
+      },
+    },
+    {
+      source: 'data.scopes',
+      scopeEnvelope: {
+        data: {
+          scopes: ['search:message', 'im:message:readonly', 'search:message'],
+        },
+      },
+    },
+  ])('normalizes, deduplicates, and sorts scopes from $source', async ({
+    scopeEnvelope,
+  }) => {
+    const runner = new RecordingRunner([
+      success('lark-cli version 1.0.68'),
+      success({ identity: 'user', userOpenId: 'ou_legacy' }),
+      success(scopeEnvelope),
+      success([]),
+    ])
+
+    const review = await new LarkCliAdapter({ runner }).reviewCapabilities()
+
+    expect(review.scopes).toEqual(['im:message:readonly', 'search:message'])
   })
 })
 

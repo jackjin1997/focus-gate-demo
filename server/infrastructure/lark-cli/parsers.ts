@@ -22,23 +22,47 @@ export const parseCapabilityReview = (outputs: {
   )
   const scopeEnvelope = parseJsonRecord(outputs.scopes, 'capabilities.scopes')
   const eventEnvelope = parseJson(outputs.events, 'capabilities.events')
-  const identity = normalizeIdentity(authStatus.identity)
-  const userOpenId = identity === 'user'
-    ? firstString(authStatus.userOpenId, authStatus.user_open_id) ?? null
+  const rootIdentity = normalizeIdentity(authStatus.identity)
+  const identities = isRecord(authStatus.identities)
+    ? authStatus.identities
     : null
+  let identity = rootIdentity
+  let userOpenId: string | null = null
+
+  if (identities) {
+    const nestedUser = isRecord(identities.user) ? identities.user : null
+    const nestedUserOpenId = nestedUser
+      ? firstNonBlankString(nestedUser.openId, nestedUser.open_id)
+      : undefined
+
+    if (
+      nestedUser?.status === 'ready' &&
+      authStatus.verified !== false &&
+      nestedUserOpenId
+    ) {
+      identity = 'user'
+      userOpenId = nestedUserOpenId
+    }
+  } else if (rootIdentity === 'user') {
+    userOpenId =
+      firstNonBlankString(authStatus.userOpenId, authStatus.user_open_id) ??
+      null
+  }
+
+  const scopeData = isRecord(scopeEnvelope.data) ? scopeEnvelope.data : null
+  const rawScopes = [
+    scopeEnvelope.userScopes,
+    scopeEnvelope.scopes,
+    scopeData?.userScopes,
+    scopeData?.scopes,
+  ].find(Array.isArray)
 
   return {
     cliVersion: extractVersion(outputs.version),
-    authenticated: identity === 'user',
+    authenticated: identity === 'user' && userOpenId !== null,
     identity,
     userOpenId,
-    scopes: Object.freeze(
-      uniqueStrings(
-        Array.isArray(scopeEnvelope.userScopes)
-          ? scopeEnvelope.userScopes
-          : scopeEnvelope.scopes,
-      ).sort(),
-    ),
+    scopes: Object.freeze(uniqueStrings(rawScopes).sort()),
     eventKeys: Object.freeze(extractEventKeys(eventEnvelope).sort()),
   }
 }
@@ -266,6 +290,11 @@ const uniqueStrings = (values: unknown): string[] => {
 const firstString = (...values: unknown[]): string | undefined =>
   values.find((value): value is string =>
     typeof value === 'string' && value.length > 0,
+  )
+
+const firstNonBlankString = (...values: unknown[]): string | undefined =>
+  values.find((value): value is string =>
+    typeof value === 'string' && value.trim().length > 0,
   )
 
 const isRecord = (value: unknown): value is JsonRecord =>
